@@ -52,18 +52,37 @@ extern YYSTYPE cool_yylval;
 DARROW          =>
 TRUE            t(?i:rue)
 FALSE           f(?i:alse)
+WHITESPACE      [ \t\f\v\r]+
+INTEGER         [0-9]+
+
+%x COMMENT INLINE_COMMENT STRING
 
 %%
 
  /*
   *  Nested comments
   */
+\(\*          { BEGIN COMMENT; }
+<COMMENT>\*\) { BEGIN INITIAL; }
+<COMMENT>.    { }
+
+<INITIAL>--             { BEGIN INLINE_COMMENT; }
+<INLINE_COMMENT>\n      { curr_lineno++; BEGIN INITIAL; }
+<INLINE_COMMENT><<EOF>> { BEGIN INITIAL; }
+<INLINE_COMMENT>.       { }
+
 
 
  /*
   *  The multiple-character operators.
   */
 {DARROW}		  { return (DARROW); }
+
+
+ /*
+  * Keywords are case-insensitive except for the values true and false,
+  * which must begin with a lower-case letter.
+  */
 
 (?i:class)    { return CLASS; }
 (?i:else)     { return ELSE; }
@@ -84,16 +103,9 @@ FALSE           f(?i:alse)
 (?i:not)      { return NOT; }
 
 
+
 {TRUE}        { yylval.boolean = 1; return BOOL_CONST; }
 {FALSE}       { yylval.boolean = 0; return BOOL_CONST; }
-
-
-
-
- /*
-  * Keywords are case-insensitive except for the values true and false,
-  * which must begin with a lower-case letter.
-  */
 
 
  /*
@@ -102,6 +114,11 @@ FALSE           f(?i:alse)
   *  \n \t \b \f, the result is c.
   *
   */
+{INTEGER} {
+  yylval.symbol = stringtable.add_string(yytext);
+  return INT_CONST;
+}
+
 
 
 %%
