@@ -50,6 +50,8 @@ extern YYSTYPE cool_yylval;
  */
 
 DARROW          =>
+TRUE            t(?i:rue)
+FALSE           f(?i:alse)
 
 %%
 
@@ -61,7 +63,32 @@ DARROW          =>
  /*
   *  The multiple-character operators.
   */
-{DARROW}		{ return (DARROW); }
+{DARROW}		  { return (DARROW); }
+
+(?i:class)    { return CLASS; }
+(?i:else)     { return ELSE; }
+(?i:fi)       { return FI; }
+(?i:if)       { return IF; }
+(?i:in)       { return IN; }
+(?i:inherits) { return INHERITS; }
+(?i:isvoid)   { return ISVOID; }
+(?i:let)      { return LET; }
+(?i:loop)     { return LOOP; }
+(?i:pool)     { return POOL; }
+(?i:then)     { return THEN; }
+(?i:while)    { return WHILE; }
+(?i:case)     { return CASE; }
+(?i:esac)     { return ESAC; }
+(?i:new)      { return NEW; }
+(?i:of)       { return OF; }
+(?i:not)      { return NOT; }
+
+
+{TRUE}        { yylval.boolean = 1; return BOOL_CONST; }
+{FALSE}       { yylval.boolean = 0; return BOOL_CONST; }
+
+
+
 
  /*
   * Keywords are case-insensitive except for the values true and false,
