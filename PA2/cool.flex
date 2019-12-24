@@ -43,6 +43,10 @@ extern YYSTYPE cool_yylval;
  *  Add Your own definitions here
  */
 
+static std::string curr_string;
+static int comment_stack = 0;
+static int string_null = 0;
+
 %}
 
 /*
@@ -54,6 +58,10 @@ TRUE            t(?i:rue)
 FALSE           f(?i:alse)
 WHITESPACE      [ \t\f\v\r]+
 INTEGER         [0-9]+
+IDCHAR          [a-zA-Z0-9_]
+OBJECTID        [a-z]{IDCHAR}*
+TYPEID          [A-Z]{IDCHAR}*
+PRECEDENCE      [\,\.\@\~\*\/\+\-\<\=\(\)\{\}\:\;]
 
 %x COMMENT INLINE_COMMENT STRING
 
@@ -62,8 +70,33 @@ INTEGER         [0-9]+
  /*
   *  Nested comments
   */
-\(\*          { BEGIN COMMENT; }
-<COMMENT>\*\) { BEGIN INITIAL; }
+\(\*          { BEGIN COMMENT; comment_stack++; }
+
+<COMMENT>\(\* {
+  comment_stack++;
+}
+
+<COMMENT>\*\) { 
+  comment_stack--; 
+  if (comment_stack == 0) {
+    BEGIN INITIAL;
+  }
+}
+
+\*\) { 
+  BEGIN INITIAL;
+  yylval.error_msg = "Unmatched *)";
+  return ERROR;
+}
+
+<COMMENT>\n   { curr_lineno++; }
+
+<COMMENT><<EOF>> {
+  BEGIN INITIAL;
+  yylval.error_msg = "EOF in comment";
+  return ERROR;
+}
+
 <COMMENT>.    { }
 
 <INITIAL>--             { BEGIN INLINE_COMMENT; }
@@ -72,11 +105,13 @@ INTEGER         [0-9]+
 <INLINE_COMMENT>.       { }
 
 
-
  /*
   *  The multiple-character operators.
   */
 {DARROW}		  { return (DARROW); }
+"<="          { return LE; }
+"<-"          { return ASSIGN; }
+{PRECEDENCE}  { return int(yytext[0]); }
 
 
  /*
@@ -102,8 +137,6 @@ INTEGER         [0-9]+
 (?i:of)       { return OF; }
 (?i:not)      { return NOT; }
 
-
-
 {TRUE}        { yylval.boolean = 1; return BOOL_CONST; }
 {FALSE}       { yylval.boolean = 0; return BOOL_CONST; }
 
@@ -115,8 +148,104 @@ INTEGER         [0-9]+
   *
   */
 {INTEGER} {
-  yylval.symbol = stringtable.add_string(yytext);
+  yylval.symbol = inttable.add_string(yytext);
   return INT_CONST;
+}
+
+{TYPEID} {
+  yylval.symbol = idtable.add_string(yytext);
+  return TYPEID;
+}
+
+{OBJECTID} {
+  yylval.symbol = idtable.add_string(yytext);
+  return OBJECTID;
+}
+
+\" {
+  BEGIN STRING;
+  curr_string = "";
+  string_null = 0;
+}
+
+<STRING>\" {
+  BEGIN INITIAL;
+  if (curr_string.size() >= MAX_STR_CONST) {
+    yylval.error_msg = "String constant too long";
+    return ERROR;
+  }
+  if (string_null > 0) {
+    yylval.error_msg = "String contains null character";
+    return ERROR;
+  } else {
+    yylval.symbol = stringtable.add_string((char *) curr_string.c_str());
+    return STR_CONST;
+  }
+}
+
+
+<STRING>\\. {
+  switch (yytext[1]) {
+    case 'b':
+      curr_string += '\b';
+      break;
+    case 't':
+      curr_string += '\t';
+      break;
+    case 'n':
+      curr_string += '\n';
+      break;
+    case 'f':
+      curr_string += '\f';
+      break;
+    case '\0':
+      string_null++;
+      break;
+    default:
+      curr_string += yytext[1];
+      break;
+  }
+}
+
+<STRING>\\\n {
+  curr_string += '\n';
+  curr_lineno++;
+}
+
+<STRING>\n {
+  BEGIN INITIAL;
+  yylval.error_msg = "Unterminated string constant";
+  return ERROR;
+}
+
+<STRING>\0 {
+  string_null++;
+}
+
+<STRING><<EOF>> {
+  BEGIN INITIAL;
+  yylval.error_msg = "EOF in string constant";
+  return ERROR;
+}
+
+<STRING>. {
+  curr_string += yytext;
+}
+
+\'.\' {
+  yylval.symbol = stringtable.add_string(&yytext[1]);
+  return STR_CONST;
+}
+
+{WHITESPACE} { }
+
+\n {
+  curr_lineno++;
+}
+
+. {
+  yylval.error_msg = yytext;
+  return ERROR;
 }
 
 
